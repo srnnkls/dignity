@@ -1,0 +1,23 @@
+[project]
+name = "dignity"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Sören Nikolaus", email = "soeren@getml.com" }
+]
+requires-python = ">=3.13"
+dependencies = ["typer>=0.15.1"]
+
+[project.scripts]
+dignity = "dignity:main"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.407",
+    "pytest>=8.3.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
