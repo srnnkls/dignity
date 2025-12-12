@@ -37,6 +37,84 @@ You can integrate this with your shell's status line (e.g., in your `.bashrc`, `
 export PS1='$(dignity ~/.claude/transcript.jsonl) $ '
 ```
 
+## Hook Dispatch
+
+Declarative rule-based activation system for Claude Code hooks.
+
+### CLI
+
+```bash
+# Process hook event from stdin JSON
+echo '{"prompt": "implement feature X"}' | dignity dispatch UserPromptSubmit
+```
+
+### Shell Hook Integration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "dignity dispatch UserPromptSubmit"
+      }
+    ]
+  }
+}
+```
+
+### Configuration
+
+Rules are loaded from (first found wins):
+
+1. `DIGNITY_RULES_PATH` environment variable
+2. `.claude/rules.json` (project-local)
+3. `~/.claude/hooks/rules.json` (global)
+
+### Rules Format
+
+```json
+{
+  "rules": {
+    "suggest-tdd": {
+      "priority": "high",
+      "action": {
+        "type": "suggest_skill",
+        "skill": "code-test",
+        "reason": "Implementation task detected"
+      },
+      "triggers": {
+        "UserPromptSubmit": {
+          "keywords": ["implement", "add", "create"]
+        }
+      }
+    }
+  }
+}
+```
+
+### Action Types
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `suggest_skill` | `skill`, `reason` | Suggest invoking a skill |
+| `remind` | `message` | Show reminder in output |
+| `block` | `reason` | Block with error (SubagentStop) |
+| `inject_context` | `context` | Add context to prompt |
+
+### Trigger Types
+
+| Trigger | Fields | Hook Events |
+|---------|--------|-------------|
+| `keywords` | Word list | UserPromptSubmit |
+| `intent_patterns` | Regex list | UserPromptSubmit |
+| `tool_result` | `tool_name`, `parameter_patterns` | Stop |
+| `todo_state` | `any_completed`, `all_completed` | Stop |
+| `skill_invoked` | `skill` | Stop |
+| `output_missing` | `required_patterns` | SubagentStop |
+
 ## Development
 
 ### Running Tests

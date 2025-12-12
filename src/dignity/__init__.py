@@ -1,11 +1,17 @@
-"""CLI for Claude Code status line display."""
+"""CLI for Claude Code utilities.
+
+Provides commands for:
+- statusline: Generate status line for Claude Code
+- tokens: Display token metrics from transcript
+- dispatch: Process hook events with declarative rules
+"""
 
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 
@@ -13,6 +19,8 @@ from dignity.statusline import StatusLineInput, render_statusline
 from dignity.tokens import get_token_metrics
 
 app = typer.Typer()
+
+HookEventArg = Literal["UserPromptSubmit", "Stop", "SubagentStop"]
 
 
 def format_number(n: int) -> str:
@@ -73,6 +81,31 @@ def statusline_command() -> None:
     )
 
     print(render_statusline(status_input))
+
+
+@app.command(name="dispatch")
+def dispatch_command(
+    hook_event: Annotated[
+        str,
+        typer.Argument(help="Hook event type: UserPromptSubmit, Stop, or SubagentStop"),
+    ],
+) -> None:
+    """Process hook event with declarative dispatch rules.
+
+    Reads JSON data from stdin and outputs appropriate response
+    based on configured rules.
+
+    Example:
+        echo '{"prompt":"test"}' | dignity dispatch UserPromptSubmit
+    """
+    from dignity.hooks.dispatch import HookEvent, dispatch
+
+    if hook_event not in ("UserPromptSubmit", "Stop", "SubagentStop"):
+        typer.echo(f"Invalid hook event: {hook_event}", err=True)
+        raise typer.Exit(1)
+
+    data = json.load(sys.stdin)
+    dispatch(hook_event, data)  # type: ignore[arg-type]
 
 
 def main() -> None:
