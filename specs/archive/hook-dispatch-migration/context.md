@@ -138,4 +138,26 @@ None remaining after validation.
 
 ## Gotchas & Learnings
 
-(To be updated during implementation)
+- Pydantic v2 discriminated unions require `Literal` type annotations on the discriminator field
+- Config path resolution needed careful ordering: env override → project → global fallback
+- Stop hook triggers (tool_result, todo_state, skill_invoked) required new matcher functions
+
+---
+
+## Archive Notes
+
+**Summary:** Successfully migrated the declarative hook dispatch system from standalone resource module to integrated dignity package. The system enables rule-based automation via Claude Code hooks with pattern matching, context extraction, and configurable actions.
+
+**Key Outcomes:**
+- Full dispatch module at `src/dignity/hooks/dispatch/` (6 source files, ~1.3k lines)
+- CLI command: `dignity dispatch <HookEvent>`
+- 111 tests passing with 100% success rate
+- Configurable rules.json loading (project → global → env fallback)
+
+**Technical Debt / Future Work:**
+- `resources/.claude/hooks/dispatch/` source files remain for reference (can be removed)
+- Stop hook triggers (tool_result, todo_state, skill_invoked) implemented but not yet wired to rules.json schema
+
+**Lessons Learned:**
+- TDD approach with red/green evidence captured in spec proved useful for verification
+- Phased migration (types → matchers → extractors → actions → config → dispatcher → CLI) minimized integration risk
