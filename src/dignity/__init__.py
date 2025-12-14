@@ -71,16 +71,18 @@ def tokens(
 @app.command(name="statusline")
 def statusline_command() -> None:
     """Generate status line for Claude Code (reads JSON from stdin)."""
-    input_json = json.load(sys.stdin)
-
-    status_input = StatusLineInput(
-        model_name=input_json.get("model", {}).get("display_name", "Unknown"),
-        current_dir=input_json.get("workspace", {}).get("current_dir", ""),
-        transcript_path=input_json.get("transcript_path", ""),
-        max_tokens=input_json.get("budgetInfo", {}).get("tokenBudget", 200000),
-    )
-
-    print(render_statusline(status_input))
+    try:
+        input_json = json.load(sys.stdin)
+        status_input = StatusLineInput(
+            model_name=input_json.get("model", {}).get("display_name", "Unknown"),
+            current_dir=input_json.get("workspace", {}).get("current_dir", ""),
+            transcript_path=input_json.get("transcript_path", ""),
+            max_tokens=input_json.get("budgetInfo", {}).get("tokenBudget", 200000),
+        )
+        print(render_statusline(status_input))
+    except Exception as e:
+        print(f"statusline error: {e}", file=sys.stderr)
+        raise typer.Exit(1)
 
 
 @app.command(name="dispatch")
