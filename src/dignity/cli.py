@@ -13,6 +13,8 @@ from dignity.statusline import StatusLineInput, render_statusline
 from dignity.tokens import get_token_metrics
 
 app = typer.Typer()
+spec_app = typer.Typer()
+app.add_typer(spec_app, name="spec", help="Spec management commands")
 
 HookEventArg = Literal["UserPromptSubmit", "Stop", "SubagentStop"]
 
@@ -101,6 +103,35 @@ def dispatch(
 
     data = json.load(sys.stdin)
     do_dispatch(hook_event, data)  # type: ignore[arg-type]
+
+
+@spec_app.command("create")
+def spec_create(
+    spec_name: Annotated[str, typer.Argument(help="Spec name in kebab-case")],
+    issue_type: Annotated[
+        str, typer.Option("--type", "-t", help="Issue type: feature, bug, or chore")
+    ] = "feature",
+    no_register: Annotated[
+        bool, typer.Option("--no-register", help="Skip adding to index.yaml")
+    ] = False,
+) -> None:
+    """Create a new spec with scaffolded files.
+
+    Example:
+        dignity spec create my-feature --type feature
+    """
+    from dignity.spec import SpecCreateError, create
+
+    try:
+        config = create(spec_name, issue_type=issue_type, register=not no_register)
+        typer.echo(f"Created spec '{config.name}' with code {config.code}")
+        typer.echo(f"  → specs/active/{config.name}/spec.md")
+        typer.echo(f"  → specs/active/{config.name}/tasks.yaml")
+        if not no_register:
+            typer.echo(f"  → specs/index.yaml ({config.code}: {config.name})")
+    except SpecCreateError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
 
 
 def main() -> None:
