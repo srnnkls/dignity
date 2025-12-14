@@ -98,7 +98,7 @@ def dispatch_command(
     Example:
         echo '{"prompt":"test"}' | dignity dispatch UserPromptSubmit
     """
-    from dignity.hooks.dispatch import HookEvent, dispatch
+    from dignity.hooks.dispatch import dispatch
 
     if hook_event not in ("UserPromptSubmit", "Stop", "SubagentStop"):
         typer.echo(f"Invalid hook event: {hook_event}", err=True)

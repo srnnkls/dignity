@@ -22,14 +22,17 @@ from dignity.hooks.dispatch.matchers import (
     match_todo_state_trigger,
     match_tool_result_trigger,
     match_trigger,
+    match_trigger_group,
     match_word_boundaries,
 )
 from dignity.hooks.dispatch.types import (
+    FilesChangedTrigger,
     HookContext,
     OutputMissingTrigger,
     SkillInvokedTrigger,
     TodoStateTrigger,
     ToolResultTrigger,
+    TriggerGroup,
     TriggerSpec,
 )
 
@@ -543,3 +546,138 @@ def test_match_trigger_empty_patterns() -> None:
     }
     result = match_trigger(trigger, context)
     assert result == frozenset()
+
+
+# --- match_trigger_group AND semantics tests ---
+
+
+def test_match_trigger_group_single_trigger_match() -> None:
+    """Match group with single active trigger."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+    )
+    context: HookContext = {"keywords": "please test this"}
+    result = match_trigger_group(group, context)
+    assert result is not None
+    matched, captures = result
+    assert matched == frozenset({"test"})
+    assert captures == {}
+
+
+def test_match_trigger_group_single_trigger_no_match() -> None:
+    """Return None when single trigger doesn't match."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"missing"})},
+    )
+    context: HookContext = {"keywords": "some text"}
+    result = match_trigger_group(group, context)
+    assert result is None
+
+
+def test_match_trigger_group_and_semantics_both_match() -> None:
+    """Match group when ALL active triggers match (AND)."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+    )
+    context: HookContext = {
+        "keywords": "please test this",
+        "tool_results": [{"tool_name": "TodoWrite", "parameters": {}}],
+    }
+    result = match_trigger_group(group, context)
+    assert result is not None
+    matched, captures = result
+    assert "test" in matched
+    assert "TodoWrite" in matched
+
+
+def test_match_trigger_group_and_semantics_one_fails() -> None:
+    """Return None when one active trigger doesn't match (AND fails)."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+    )
+    context: HookContext = {
+        "keywords": "please test this",  # This matches
+        "tool_results": [{"tool_name": "Read", "parameters": {}}],  # This doesn't
+    }
+    result = match_trigger_group(group, context)
+    assert result is None
+
+
+def test_match_trigger_group_empty_no_match() -> None:
+    """Return None for empty group (no active triggers)."""
+    group = TriggerGroup()
+    context: HookContext = {"keywords": "anything"}
+    result = match_trigger_group(group, context)
+    assert result is None
+
+
+def test_match_trigger_group_three_triggers_all_match() -> None:
+    """Match when all three active triggers match."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+        skill_invoked=SkillInvokedTrigger(skill="code-test"),
+    )
+    context: HookContext = {
+        "keywords": "please test",
+        "tool_results": [{"tool_name": "TodoWrite", "parameters": {}}],
+        "invoked_skills": {"code-test"},
+    }
+    result = match_trigger_group(group, context)
+    assert result is not None
+    matched, captures = result
+    assert "test" in matched
+    assert "TodoWrite" in matched
+    assert "code-test" in matched
+
+
+def test_match_trigger_group_three_triggers_one_fails() -> None:
+    """Return None when one of three triggers doesn't match."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+        skill_invoked=SkillInvokedTrigger(skill="code-test"),
+    )
+    context: HookContext = {
+        "keywords": "please test",
+        "tool_results": [{"tool_name": "TodoWrite", "parameters": {}}],
+        "invoked_skills": {"other-skill"},  # Doesn't match
+    }
+    result = match_trigger_group(group, context)
+    assert result is None
+
+
+def test_match_trigger_group_files_changed_with_captures() -> None:
+    """Match files_changed trigger and extract named capture groups."""
+    group = TriggerGroup(
+        files_changed=FilesChangedTrigger(
+            path_patterns=frozenset({r"specs/active/(?P<spec_id>[^/]+)/tasks\.md"})
+        ),
+    )
+    context: HookContext = {
+        "changed_files": ["specs/active/my-feature/tasks.md"],
+    }
+    result = match_trigger_group(group, context)
+    assert result is not None
+    matched, captures = result
+    assert len(matched) > 0
+    assert captures.get("spec_id") == "my-feature"
+
+
+def test_match_trigger_group_files_changed_no_captures() -> None:
+    """Match files_changed trigger without capture groups."""
+    group = TriggerGroup(
+        files_changed=FilesChangedTrigger(
+            path_patterns=frozenset({r"specs/active/.*/tasks\.md"})
+        ),
+    )
+    context: HookContext = {
+        "changed_files": ["specs/active/my-feature/tasks.md"],
+    }
+    result = match_trigger_group(group, context)
+    assert result is not None
+    matched, captures = result
+    assert len(matched) > 0
+    assert captures == {}

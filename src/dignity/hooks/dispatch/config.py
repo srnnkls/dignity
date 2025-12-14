@@ -26,8 +26,10 @@ from dignity.hooks.dispatch.types import (
     Rule,
     RuleSet,
     SkillInvokedTrigger,
+    StateExistsTrigger,
     TodoStateTrigger,
     ToolResultTrigger,
+    TriggerGroup,
     TriggerSpec,
 )
 
@@ -92,14 +94,14 @@ def _parse_action(action_data: dict[str, Any]) -> Action:
     return _action_adapter.validate_python(action_data)
 
 
-def _parse_trigger(trigger_data: dict[str, Any]) -> TriggerSpec:
-    """Parse trigger spec from JSON data."""
+def _parse_trigger_group(group_data: dict[str, Any]) -> TriggerGroup:
+    """Parse a single trigger group from JSON data."""
     patterns: dict[str, frozenset[str]] = {}
 
     # Extract pattern fields
     for field in ["keywords", "intent_patterns", "description_patterns", "agent_types"]:
-        if field in trigger_data:
-            value = trigger_data[field]
+        if field in group_data:
+            value = group_data[field]
             if isinstance(value, list):
                 patterns[field] = frozenset(value)
             elif isinstance(value, str):
@@ -107,8 +109,8 @@ def _parse_trigger(trigger_data: dict[str, Any]) -> TriggerSpec:
 
     # Parse specialized triggers
     tool_result = ToolResultTrigger()
-    if "tool_result" in trigger_data:
-        tr_data = trigger_data["tool_result"]
+    if "tool_result" in group_data:
+        tr_data = group_data["tool_result"]
         tool_name = tr_data.get("tool_name", [])
         if isinstance(tool_name, str):
             tool_name = [tool_name]
@@ -121,29 +123,29 @@ def _parse_trigger(trigger_data: dict[str, Any]) -> TriggerSpec:
         )
 
     todo_state = TodoStateTrigger()
-    if "todo_state" in trigger_data:
-        ts_data = trigger_data["todo_state"]
+    if "todo_state" in group_data:
+        ts_data = group_data["todo_state"]
         todo_state = TodoStateTrigger(
             any_completed=ts_data.get("any_completed", False),
             all_completed=ts_data.get("all_completed", False),
         )
 
     skill_invoked = SkillInvokedTrigger()
-    if "skill_invoked" in trigger_data:
-        si_data = trigger_data["skill_invoked"]
+    if "skill_invoked" in group_data:
+        si_data = group_data["skill_invoked"]
         skill_invoked = SkillInvokedTrigger(skill=si_data.get("skill", ""))
 
     output_missing = OutputMissingTrigger()
-    if "output_missing" in trigger_data:
-        om_data = trigger_data["output_missing"]
+    if "output_missing" in group_data:
+        om_data = group_data["output_missing"]
         required = om_data.get("required_patterns", [])
         if isinstance(required, str):
             required = [required]
         output_missing = OutputMissingTrigger(required_patterns=frozenset(required))
 
     files_changed = FilesChangedTrigger()
-    if "files_changed" in trigger_data:
-        fc_data = trigger_data["files_changed"]
+    if "files_changed" in group_data:
+        fc_data = group_data["files_changed"]
         path_patterns = fc_data.get("path_patterns", [])
         content_patterns = fc_data.get("content_patterns", [])
         if isinstance(path_patterns, str):
@@ -155,13 +157,48 @@ def _parse_trigger(trigger_data: dict[str, Any]) -> TriggerSpec:
             content_patterns=frozenset(content_patterns),
         )
 
-    return TriggerSpec(
+    state_exists = StateExistsTrigger()
+    if "state_exists" in group_data:
+        se_data = group_data["state_exists"]
+        state_exists = StateExistsTrigger(key=se_data.get("key", ""))
+
+    return TriggerGroup(
         patterns=patterns,
         tool_result=tool_result,
         todo_state=todo_state,
         skill_invoked=skill_invoked,
         output_missing=output_missing,
         files_changed=files_changed,
+        state_exists=state_exists,
+    )
+
+
+def _parse_trigger(trigger_data: dict[str, Any]) -> TriggerSpec:
+    """Parse trigger spec from JSON data.
+
+    Supports two formats:
+    1. Legacy: direct trigger fields (converted to single implicit group)
+    2. New: explicit "groups" array with AND/OR semantics
+    """
+    # Check for explicit groups format
+    if "groups" in trigger_data:
+        groups_data = trigger_data["groups"]
+        if not isinstance(groups_data, list):
+            groups_data = [groups_data]
+        groups = tuple(_parse_trigger_group(g) for g in groups_data)
+        return TriggerSpec(groups=groups)
+
+    # Legacy format: parse as single implicit group
+    # TriggerSpec's __post_init__ will wrap it in a group
+    group = _parse_trigger_group(trigger_data)
+    return TriggerSpec(
+        patterns=group.patterns,
+        tool_result=group.tool_result,
+        todo_state=group.todo_state,
+        skill_invoked=group.skill_invoked,
+        output_missing=group.output_missing,
+        files_changed=group.files_changed,
+        state_exists=group.state_exists,
     )
 
 

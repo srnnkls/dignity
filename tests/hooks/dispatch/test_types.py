@@ -4,6 +4,7 @@ Tests cover:
 - Action types (discriminated union)
 - Trigger types (tool result, todo state, skill invoked, output missing, files changed)
 - Core types (Priority, HookEvent, Rule, Match, RuleSet)
+- Trigger groups (AND/OR logic)
 - Type immutability and validation
 """
 
@@ -26,8 +27,82 @@ from dignity.hooks.dispatch.types import (
     SuggestSkillAction,
     TodoStateTrigger,
     ToolResultTrigger,
+    TriggerGroup,
     TriggerSpec,
 )
+
+
+# TriggerGroup tests (flat functions)
+
+
+def test_trigger_group_creation() -> None:
+    """TriggerGroup should hold all trigger fields."""
+    group = TriggerGroup(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+        files_changed=FilesChangedTrigger(
+            path_patterns=frozenset({"specs/active/**/tasks.md"})
+        ),
+    )
+    assert "keywords" in group.patterns
+    assert "TodoWrite" in group.tool_result.tool_name
+    assert "specs/active/**/tasks.md" in group.files_changed.path_patterns
+
+
+def test_trigger_group_immutable() -> None:
+    """TriggerGroup should be immutable."""
+    group = TriggerGroup()
+    with pytest.raises(Exception):
+        group.patterns = {}  # type: ignore[misc]
+
+
+def test_trigger_group_defaults() -> None:
+    """TriggerGroup should default to inactive triggers."""
+    group = TriggerGroup()
+    assert group.patterns == {}
+    assert not group.tool_result.is_active()
+    assert not group.todo_state.is_active()
+    assert not group.skill_invoked.is_active()
+    assert not group.output_missing.is_active()
+    assert not group.files_changed.is_active()
+
+
+def test_trigger_spec_with_explicit_groups() -> None:
+    """TriggerSpec should support list of trigger groups."""
+    group1 = TriggerGroup(
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+        files_changed=FilesChangedTrigger(
+            path_patterns=frozenset({"specs/active/**/tasks.md"})
+        ),
+    )
+    group2 = TriggerGroup(
+        skill_invoked=SkillInvokedTrigger(skill="spec-create"),
+    )
+    spec = TriggerSpec(groups=(group1, group2))
+    assert len(spec.groups) == 2
+
+
+def test_trigger_spec_backwards_compat() -> None:
+    """TriggerSpec without groups should work as single group."""
+    spec = TriggerSpec(
+        patterns={"keywords": frozenset({"test"})},
+        tool_result=ToolResultTrigger(tool_name=frozenset({"TodoWrite"})),
+    )
+    assert len(spec.groups) == 1
+    assert "keywords" in spec.groups[0].patterns
+    assert "TodoWrite" in spec.groups[0].tool_result.tool_name
+
+
+def test_trigger_spec_empty_has_no_groups() -> None:
+    """TriggerSpec with no triggers should have no groups."""
+    spec = TriggerSpec()
+    assert len(spec.groups) == 0
+
+
+def test_trigger_spec_explicit_empty_groups() -> None:
+    """TriggerSpec with explicit empty groups tuple should have no groups."""
+    spec = TriggerSpec(groups=())
+    assert len(spec.groups) == 0
 
 
 class TestActionTypes:

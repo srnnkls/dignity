@@ -21,18 +21,16 @@ from dignity.hooks.dispatch.actions import (
 from dignity.hooks.dispatch.config import load_rules
 from dignity.hooks.dispatch.extractors import extract_context
 from dignity.hooks.dispatch.matchers import (
-    match_output_missing_trigger,
-    match_skill_invoked_trigger,
-    match_todo_state_trigger,
-    match_tool_result_trigger,
-    match_trigger,
+    match_trigger_group,
 )
 from dignity.hooks.dispatch.types import (
+    ClearStateAction,
     HookContext,
     HookEvent,
     Match,
     Rule,
     RuleSet,
+    SetStateAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,52 +38,89 @@ logger = logging.getLogger(__name__)
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
+def _extract_value(value_from: str, captures: dict[str, str]) -> str | None:
+    """Extract value from captures using a path expression.
+
+    Supports "captured.{key}" format.
+    """
+    if value_from.startswith("captured."):
+        key = value_from[9:]  # len("captured.") == 9
+        return captures.get(key)
+    return None
+
+
+def _execute_actions(matches: list[Match], context: HookContext) -> None:
+    """Execute state actions from matches.
+
+    Processes SetStateAction and ClearStateAction.
+    """
+    from dignity import state
+
+    session_id = context.get("session_id", "")
+    if not session_id:
+        logger.warning("No session_id in context, skipping state actions")
+        return
+
+    for match in matches:
+        match match.action:
+            case SetStateAction(key=key, value_from=value_from):
+                if state.exists(session_id, key):
+                    logger.warning(
+                        "State key '%s' already exists, skipping set (use clear first)",
+                        key,
+                    )
+                    continue
+
+                value = _extract_value(value_from, match.captures)
+                if value is None:
+                    logger.warning(
+                        "Could not extract value from '%s' for key '%s'",
+                        value_from,
+                        key,
+                    )
+                    continue
+
+                state.set(session_id, key, value)
+                logger.debug("Set state '%s' = '%s'", key, value)
+
+            case ClearStateAction(key=key):
+                state.clear(session_id, key)
+                logger.debug("Cleared state '%s'", key)
+
+
 def _match_rule(
     rule: Rule, hook_event: HookEvent, context: HookContext
 ) -> Match | None:
-    """Match a single rule against context for a hook event."""
+    """Match a single rule against context for a hook event.
+
+    Uses trigger group semantics:
+    - Within each group: AND (all active triggers must match)
+    - Across groups: OR (any group matching triggers the rule)
+    """
     match rule:
         case Rule(name=name, priority=priority, action=action, triggers=triggers):
-            trigger = triggers.get(hook_event)
-            if not trigger:
+            trigger_spec = triggers.get(hook_event)
+            if not trigger_spec:
                 return None
 
-            all_matched: set[str] = set()
-
-            # Match base trigger patterns
-            base_matches = match_trigger(trigger, context)
-            all_matched.update(base_matches)
-
-            # Match specialized triggers
-            if trigger.tool_result.is_active():
-                tool_matches = match_tool_result_trigger(trigger.tool_result, context)
-                all_matched.update(tool_matches)
-
-            if trigger.todo_state.is_active():
-                todo_matches = match_todo_state_trigger(trigger.todo_state, context)
-                all_matched.update(todo_matches)
-
-            if trigger.skill_invoked.is_active():
-                skill_matches = match_skill_invoked_trigger(
-                    trigger.skill_invoked, context
-                )
-                all_matched.update(skill_matches)
-
-            if trigger.output_missing.is_active():
-                output_matches = match_output_missing_trigger(
-                    trigger.output_missing, context
-                )
-                all_matched.update(output_matches)
-
-            if not all_matched:
+            # No groups means no match
+            if not trigger_spec.groups:
                 return None
 
-            return Match(
-                rule_name=name,
-                priority=priority,
-                action=action,
-                matched_patterns=frozenset(all_matched),
-            )
+            # OR across groups: try each group, return on first match
+            for group in trigger_spec.groups:
+                group_result = match_trigger_group(group, context)
+                if group_result is not None:
+                    matched_patterns, captures = group_result
+                    return Match(
+                        rule_name=name,
+                        priority=priority,
+                        action=action,
+                        matched_patterns=matched_patterns,
+                        captures=captures,
+                    )
+
+            return None
 
 
 def analyze_hook(
@@ -138,7 +173,7 @@ def dispatch(hook_event: HookEvent, data: dict[str, Any]) -> None:
             return
 
         if hook_event == "UserPromptSubmit":
-            output = format_user_prompt_output(matches)
+            output = format_user_prompt_output(matches, context)
             json.dump(output, sys.stdout)
 
         elif hook_event == "Stop":
@@ -152,6 +187,7 @@ def dispatch(hook_event: HookEvent, data: dict[str, Any]) -> None:
                 print(json.dumps(output))
 
         sys.stdout.flush()
+        _execute_actions(matches, context)
 
     except Exception as e:
         logger.error("Dispatch error for %s: %s", hook_event, e, exc_info=True)

@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "focus-set": {
+      "priority": "high",
+      "action": {"type": "set_state", "key": "focus", "value_from": "captured.spec_id"},
+      "triggers": {
+        "Stop": {
+          "groups": [
+            {
+              "tool_result": {"tool_name": ["TodoWrite", "Edit"]},
+              "files_changed": {"path_patterns": ["specs/active/(?P<spec_id>[^/]+)/tasks\\.md"]}
+            }
+          ]
+        }
+      }
+    },
+    "focus-clear": {
+      "priority": "high",
+      "action": {"type": "clear_state", "key": "focus"},
+      "triggers": {"Stop": {"skill_invoked": {"skill": "spec-archive"}}}
+    },
+    "focus-inject": {
+      "priority": "medium",
+      "action": {"type": "inject_context", "context": "Current focus: {state.focus}"},
+      "triggers": {"UserPromptSubmit": {"state_exists": {"key": "focus"}}}
+    }
+  }
+}

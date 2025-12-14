@@ -12,11 +12,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dignity.hooks.dispatch.types import (
+    FilesChangedTrigger,
     HookContext,
     OutputMissingTrigger,
     SkillInvokedTrigger,
+    StateExistsTrigger,
     TodoStateTrigger,
     ToolResultTrigger,
+    TriggerGroup,
     TriggerSpec,
 )
 
@@ -178,16 +181,41 @@ def match_output_missing_trigger(
     return frozenset()
 
 
-def match_trigger(trigger: TriggerSpec, context: HookContext) -> frozenset[str]:
-    """Match trigger patterns against hook context.
+def match_state_exists_trigger(
+    trigger: StateExistsTrigger, context: HookContext
+) -> frozenset[str]:
+    """Match when a state key exists.
+
+    Checks if the specified state key has a value set.
+    Requires session_id in context.
+    """
+    if not trigger.key:
+        return frozenset()
+
+    session_id = context.get("session_id", "")
+    if not session_id:
+        return frozenset()
+
+    from dignity import state
+
+    if state.exists(session_id, trigger.key):
+        return frozenset({trigger.key})
+
+    return frozenset()
+
+
+def match_patterns(
+    patterns: dict[str, frozenset[str]], context: HookContext
+) -> frozenset[str]:
+    """Match pattern dictionary against hook context.
 
     Uses OR semantics: returns all matched patterns from any field.
     Only handles text-based fields; use specialized triggers for tools.
     """
     all_matched: set[str] = set()
 
-    for field_name, patterns in trigger.patterns.items():
-        if not patterns:
+    for field_name, field_patterns in patterns.items():
+        if not field_patterns:
             continue
 
         matcher = FIELD_MATCHERS.get(field_name)
@@ -199,9 +227,96 @@ def match_trigger(trigger: TriggerSpec, context: HookContext) -> frozenset[str]:
         if not value:
             continue
 
-        all_matched.update(matcher(str(value), patterns))
+        all_matched.update(matcher(str(value), field_patterns))
 
     return frozenset(all_matched)
+
+
+def match_trigger(trigger: TriggerSpec, context: HookContext) -> frozenset[str]:
+    """Match trigger patterns against hook context.
+
+    Uses OR semantics: returns all matched patterns from any field.
+    Only handles text-based fields; use specialized triggers for tools.
+
+    DEPRECATED: Use match_trigger_group for AND/OR group semantics.
+    """
+    return match_patterns(trigger.patterns, context)
+
+
+def match_trigger_group(
+    group: TriggerGroup, context: HookContext
+) -> tuple[frozenset[str], dict[str, str]] | None:
+    """Match a trigger group with AND semantics.
+
+    All active triggers in the group must match for the group to match.
+    Returns (matched_patterns, captures) if ALL active triggers match, None otherwise.
+    """
+    all_matched: set[str] = set()
+    all_captures: dict[str, str] = {}
+    active_count = 0
+    matched_count = 0
+
+    # Check base patterns
+    if group.patterns:
+        active_count += 1
+        matches = match_patterns(group.patterns, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    # Check specialized triggers
+    if group.tool_result.is_active():
+        active_count += 1
+        matches = match_tool_result_trigger(group.tool_result, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    if group.todo_state.is_active():
+        active_count += 1
+        matches = match_todo_state_trigger(group.todo_state, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    if group.skill_invoked.is_active():
+        active_count += 1
+        matches = match_skill_invoked_trigger(group.skill_invoked, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    if group.output_missing.is_active():
+        active_count += 1
+        matches = match_output_missing_trigger(group.output_missing, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    if group.files_changed.is_active():
+        active_count += 1
+        matches, captures = match_files_changed_trigger(group.files_changed, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+            all_captures.update(captures)
+
+    if group.state_exists.is_active():
+        active_count += 1
+        matches = match_state_exists_trigger(group.state_exists, context)
+        if matches:
+            matched_count += 1
+            all_matched.update(matches)
+
+    # No active triggers means no match
+    if active_count == 0:
+        return None
+
+    # AND semantics: all active triggers must match
+    if matched_count == active_count:
+        return frozenset(all_matched), all_captures
+
+    return None
 
 
 def match_file_paths(path: Path, patterns: frozenset[str]) -> bool:
@@ -217,6 +332,58 @@ def match_file_paths(path: Path, patterns: frozenset[str]) -> bool:
             continue
 
     return False
+
+
+def match_files_changed_trigger(
+    trigger: FilesChangedTrigger, context: HookContext
+) -> tuple[frozenset[str], dict[str, str]]:
+    """Match files changed trigger with capture group support.
+
+    Returns:
+        Tuple of (matched patterns, captures dict).
+        Captures are extracted from named groups in path patterns.
+    """
+    if not trigger.is_active():
+        return frozenset(), {}
+
+    changed_files = context.get("changed_files", [])
+    if not changed_files:
+        return frozenset(), {}
+
+    matched: set[str] = set()
+    captures: dict[str, str] = {}
+
+    for file_path in changed_files:
+        path_str = str(file_path) if isinstance(file_path, Path) else file_path
+
+        # Match path patterns with capture groups
+        for pattern in trigger.path_patterns:
+            try:
+                match = re.search(pattern, path_str)
+                if match:
+                    matched.add(pattern)
+                    # Extract named capture groups
+                    captures.update(match.groupdict())
+            except re.error:
+                # Fall back to glob-style matching
+                if Path(path_str).match(pattern):
+                    matched.add(pattern)
+
+    # If path matched and content patterns exist, check content
+    if matched and trigger.content_patterns:
+        content_matched = False
+        for file_path in changed_files:
+            path = Path(file_path) if isinstance(file_path, str) else file_path
+            content_matches = match_file_content(path, trigger.content_patterns)
+            if content_matches:
+                matched.update(content_matches)
+                content_matched = True
+        # If no content matched, clear all matches
+        if not content_matched:
+            matched.clear()
+            captures.clear()
+
+    return frozenset(matched), captures
 
 
 def match_file_content(

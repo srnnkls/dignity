@@ -5,14 +5,32 @@ Pure functions that format actions into appropriate output for each hook type.
 
 from __future__ import annotations
 
+import re
 from typing import Sequence
 
 from dignity.hooks.dispatch.types import (
     BlockAction,
+    HookContext,
     InjectContextAction,
     Match,
     SuggestSkillAction,
 )
+
+
+def _interpolate_state(template: str, context: HookContext) -> str:
+    """Interpolate {state.key} placeholders with actual state values."""
+    session_id = context.get("session_id", "")
+    if not session_id:
+        return template
+
+    from dignity import state
+
+    def replace_state(match: re.Match[str]) -> str:
+        key = match.group(1)
+        value = state.get(session_id, key)
+        return value if value is not None else match.group(0)
+
+    return re.sub(r"\{state\.([^}]+)\}", replace_state, template)
 
 
 def format_skill_suggestions(matches: Sequence[Match]) -> str:
@@ -93,7 +111,9 @@ def format_reminder(matches: Sequence[Match]) -> str:
     return "\n".join(lines)
 
 
-def format_user_prompt_output(matches: Sequence[Match]) -> dict:
+def format_user_prompt_output(
+    matches: Sequence[Match], context: HookContext | None = None
+) -> dict:
     """Format output for UserPromptSubmit hook."""
     if not matches:
         return {}
@@ -106,8 +126,10 @@ def format_user_prompt_output(matches: Sequence[Match]) -> dict:
 
     for m in matches:
         match m.action:
-            case InjectContextAction(context=context):
-                context_parts.append(context)
+            case InjectContextAction(context=str() as inject_prompt):
+                if context:
+                    inject_prompt = _interpolate_state(inject_prompt, context)
+                context_parts.append(inject_prompt)
 
     if not context_parts:
         return {}
