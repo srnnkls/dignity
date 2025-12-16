@@ -3,8 +3,9 @@
 ---
 issue_type: Feature
 created: 2025-12-13
-status: Active
-claude_plan: /Users/srnnkls/.claude/plans/starry-puzzling-meerkat.md
+status: Superseded
+archived: 2025-12-16
+archived_reason: Hook dispatch system replaced by cupcake
 ---
 
 ## Overview

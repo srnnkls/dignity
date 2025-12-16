@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 import typer
 
@@ -15,8 +15,6 @@ from dignity.tokens import get_token_metrics
 app = typer.Typer()
 spec_app = typer.Typer()
 app.add_typer(spec_app, name="spec", help="Spec management commands")
-
-HookEventArg = Literal["UserPromptSubmit", "Stop", "SubagentStop"]
 
 
 def format_number(n: int) -> str:
@@ -78,31 +76,6 @@ def status() -> None:
     except Exception as e:
         print(f"status error: {e}", file=sys.stderr)
         raise typer.Exit(1)
-
-
-@app.command()
-def dispatch(
-    hook_event: Annotated[
-        str,
-        typer.Argument(help="Hook event type: UserPromptSubmit, Stop, or SubagentStop"),
-    ],
-) -> None:
-    """Process hook event with declarative dispatch rules.
-
-    Reads JSON data from stdin and outputs appropriate response
-    based on configured rules.
-
-    Example:
-        echo '{"prompt":"test"}' | dignity dispatch UserPromptSubmit
-    """
-    from dignity.hooks.dispatch import dispatch as do_dispatch
-
-    if hook_event not in ("UserPromptSubmit", "Stop", "SubagentStop"):
-        typer.echo(f"Invalid hook event: {hook_event}", err=True)
-        raise typer.Exit(1)
-
-    data = json.load(sys.stdin)
-    do_dispatch(hook_event, data)  # type: ignore[arg-type]
 
 
 @spec_app.command("create")
