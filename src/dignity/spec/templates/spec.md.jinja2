@@ -1,0 +1,23 @@
+---
+code: {{ code }}
+issue_type: {{ issue_type }}
+created: {{ created }}
+status: Active
+---
+
+# Spec: {{ title }}
+
+## Overview
+
+## Context
+{% if issue_type == "feature" %}
+
+## Architectural Approach
+
+## Success Criteria
+
+## Risks & Mitigations
+{% else %}
+
+## Success Criteria
+{% endif %}

@@ -1,0 +1,61 @@
+# Validation Checklist: {{ title }}
+
+**Issue Type:** {{ issue_type | title }}
+**Created:** {{ created }}
+
+---
+{% if issue_type == "feature" %}
+
+## Taxonomy Coverage
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Scope | | |
+| Behavior | | |
+| Data Model | | |
+| Constraints | | |
+| Edge Cases | | |
+| Integration | | |
+| Terminology | | |
+
+---
+
+## Clarification Log
+
+---
+
+## Deferred Items
+
+---
+
+## Validation Summary
+
+### Design Readiness
+
+- [ ] All high-priority taxonomy areas covered
+- [ ] Success criteria are measurable
+- [ ] Scope boundaries are clear
+- [ ] Integration points identified
+- [ ] Edge cases addressed
+
+### Next Steps
+
+- [ ] Ready for implementation planning
+- [ ] Spec documents created
+
+---
+
+## Notes
+{% else %}
+
+## Checklist
+
+- [ ] Problem clearly defined
+- [ ] Root cause identified
+- [ ] Fix approach validated
+- [ ] Test plan defined
+
+---
+
+## Notes
+{% endif %}

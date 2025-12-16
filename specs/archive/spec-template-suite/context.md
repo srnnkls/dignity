@@ -65,4 +65,28 @@ None - all clarified during validation.
 
 ## Gotchas & Learnings
 
-*Updated during implementation*
+- PackageLoader uses `importlib.resources.files()` for Python 3.9+ compatibility
+- Template `render_template` uses positional-only first param to allow `name` as a variable
+- Test files should use flat functions, not classes for namespacing (per Python guidelines)
+
+## Archive Notes
+
+**Archived:** 2025-12-16
+
+**Summary:** Extended `dignity spec create` to generate 5 spec documents using Jinja2 templates. Templates scale content by issue_type (feature=full, bug/chore=minimal). Replaced inline Python string templates with package resources loaded via importlib.resources.
+
+**Key Outcomes:**
+- Added Jinja2 dependency to pyproject.toml
+- Created `src/dignity/spec/templates/` package with PackageLoader and render_template
+- Created 5 template files: spec.md.j2, context.md.j2, tasks.md.j2, dependencies.md.j2, validation-checklist.md.j2
+- Updated create.py to use templates and generate all 5 files
+- Removed tasks.yaml, replaced with tasks.md
+- Added 66 template tests, updated create tests
+- All 211 tests passing, type checker clean
+
+**Technical Debt / Future Work:**
+- None identified
+
+**Lessons Learned:**
+- TDD workflow with tester/implementer subagents works well for parallel template creation
+- Content scaling via Jinja2 conditionals is cleaner than separate template directories

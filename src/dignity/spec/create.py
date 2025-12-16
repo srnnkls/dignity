@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from dignity.spec.index import add_entry, load_index
+from dignity.spec.templates import render_template
 from dignity.spec.validation import generate_code, make_code_unique, validate_spec_name
 
 
@@ -56,15 +57,20 @@ def create(
 ) -> SpecConfig:
     """Create a new spec.
 
-    Creates the spec directory structure and files:
+    Creates the spec directory structure and files using Jinja2 templates:
     - specs/active/{name}/spec.md - Spec document with YAML frontmatter
+    - specs/active/{name}/context.md - Context and decisions
     - specs/active/{name}/tasks.yaml - Task tracking file
+    - specs/active/{name}/dependencies.md - Task dependency graph
+    - specs/active/{name}/validation-checklist.md - Validation tracking
+
+    Content scales by issue_type: feature has full sections, bug/chore minimal.
 
     Optionally registers the spec in specs/index.yaml.
 
     Args:
         name: Spec name in kebab-case
-        issue_type: Type of issue (e.g., "feature", "task", "initiative")
+        issue_type: Type of issue ("feature", "bug", or "chore")
         register: Whether to register in specs/index.yaml
         base_dir: Base directory (defaults to current directory)
 
@@ -103,30 +109,27 @@ def create(
 
     spec_dir.mkdir(parents=True, exist_ok=True)
 
-    spec_md_content = f"""---
-code: {code}
-issue_type: {issue_type}
-created: {created_date.isoformat()}
-status: Active
----
+    title = _to_title_case(name)
+    created_str = created_date.isoformat()
+    template_vars = {
+        "name": name,
+        "code": code,
+        "issue_type": issue_type,
+        "created": created_str,
+        "title": title,
+    }
 
-# Spec: {_to_title_case(name)}
+    files_to_create = [
+        ("spec.md", "spec.md.jinja2"),
+        ("context.md", "context.md.jinja2"),
+        ("tasks.yaml", "tasks.yaml.jinja2"),
+        ("dependencies.md", "dependencies.md.jinja2"),
+        ("validation-checklist.md", "validation-checklist.md.jinja2"),
+    ]
 
-## Overview
-
-## Context
-
-## Success Criteria
-"""
-    spec_md_path = spec_dir / "spec.md"
-    spec_md_path.write_text(spec_md_content)
-
-    tasks_yaml_content = f"""spec: {name}
-code: {code}
-tasks: []
-"""
-    tasks_yaml_path = spec_dir / "tasks.yaml"
-    tasks_yaml_path.write_text(tasks_yaml_content)
+    for filename, template_name in files_to_create:
+        content = render_template(template_name, **template_vars)
+        (spec_dir / filename).write_text(content)
 
     if register:
         add_entry(index_path, code, name)

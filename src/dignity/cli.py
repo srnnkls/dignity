@@ -99,7 +99,10 @@ def spec_create(
         config = create(spec_name, issue_type=issue_type, register=not no_register)
         typer.echo(f"Created spec '{config.name}' with code {config.code}")
         typer.echo(f"  → specs/active/{config.name}/spec.md")
+        typer.echo(f"  → specs/active/{config.name}/context.md")
         typer.echo(f"  → specs/active/{config.name}/tasks.yaml")
+        typer.echo(f"  → specs/active/{config.name}/dependencies.md")
+        typer.echo(f"  → specs/active/{config.name}/validation-checklist.md")
         if not no_register:
             typer.echo(f"  → specs/index.yaml ({config.code}: {config.name})")
     except SpecCreateError as e:

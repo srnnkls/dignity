@@ -1,0 +1,38 @@
+# Task Dependencies: {{ title }}
+
+## Overview
+{% if issue_type == "feature" %}
+Task dependency graph for parallel dispatch. Tasks marked `[P]` can run in parallel if they modify different files.
+{% else %}
+Simple task sequence - execute in order.
+{% endif %}
+
+{% if issue_type == "feature" %}
+## Dependency Graph
+
+```
+Phase 1: [Setup]
+    T001 (task description)
+```
+
+## Execution Batches
+
+| Batch | Tasks | Type | Files |
+|-------|-------|------|-------|
+
+## Phase Dependencies
+
+## Parallel Safety Rules
+
+Tasks can run in parallel (`[P]`) when:
+- Same phase (shared prerequisites complete)
+- Different file paths
+- No data dependencies between them
+
+## Notes
+{% else %}
+## Tasks
+
+1. Task 1
+2. Task 2
+{% endif %}

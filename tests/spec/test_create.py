@@ -245,41 +245,6 @@ class TestCreateSpecMd:
         assert "## Success Criteria" in content
 
 
-class TestCreateTasksYaml:
-    """Tests for tasks.yaml file creation."""
-
-    def test_creates_tasks_yaml_file(self, tmp_path: Path) -> None:
-        """Creates tasks.yaml file in spec directory."""
-        create("test-spec", base_dir=tmp_path, register=False)
-        tasks_file = tmp_path / "specs" / "active" / "test-spec" / "tasks.yaml"
-        assert tasks_file.is_file()
-
-    def test_tasks_yaml_has_spec_name(self, tmp_path: Path) -> None:
-        """tasks.yaml contains spec name."""
-        create("focus-state-dispatch", base_dir=tmp_path, register=False)
-        tasks_file = (
-            tmp_path / "specs" / "active" / "focus-state-dispatch" / "tasks.yaml"
-        )
-        content = tasks_file.read_text()
-        assert "spec: focus-state-dispatch" in content
-
-    def test_tasks_yaml_has_code(self, tmp_path: Path) -> None:
-        """tasks.yaml contains code."""
-        create("focus-state-dispatch", base_dir=tmp_path, register=False)
-        tasks_file = (
-            tmp_path / "specs" / "active" / "focus-state-dispatch" / "tasks.yaml"
-        )
-        content = tasks_file.read_text()
-        assert "code: FSD" in content
-
-    def test_tasks_yaml_has_empty_tasks(self, tmp_path: Path) -> None:
-        """tasks.yaml contains empty tasks list."""
-        create("test-spec", base_dir=tmp_path, register=False)
-        tasks_file = tmp_path / "specs" / "active" / "test-spec" / "tasks.yaml"
-        content = tasks_file.read_text()
-        assert "tasks: []" in content
-
-
 class TestCreateIndexRegistration:
     """Tests for index.yaml registration."""
 
@@ -382,3 +347,80 @@ class TestCreateEdgeCases:
         result = create("api2-client", base_dir=tmp_path, register=False)
         assert result.name == "api2-client"
         assert result.code == "AC"
+
+
+# New file creation tests (target state: Jinja2 templates)
+
+
+def test_creates_context_md_file(tmp_path: Path) -> None:
+    """context.md is created in spec directory."""
+    create("test-spec", base_dir=tmp_path, register=False)
+    context_file = tmp_path / "specs" / "active" / "test-spec" / "context.md"
+    assert context_file.is_file()
+
+
+def test_creates_tasks_yaml_file(tmp_path: Path) -> None:
+    """tasks.yaml is created in spec directory."""
+    create("test-spec", base_dir=tmp_path, register=False)
+    tasks_file = tmp_path / "specs" / "active" / "test-spec" / "tasks.yaml"
+    assert tasks_file.is_file()
+
+
+def test_creates_dependencies_md_file(tmp_path: Path) -> None:
+    """dependencies.md is created in spec directory."""
+    create("test-spec", base_dir=tmp_path, register=False)
+    deps_file = tmp_path / "specs" / "active" / "test-spec" / "dependencies.md"
+    assert deps_file.is_file()
+
+
+def test_creates_validation_checklist_md_file(tmp_path: Path) -> None:
+    """validation-checklist.md is created in spec directory."""
+    create("test-spec", base_dir=tmp_path, register=False)
+    checklist_file = tmp_path / "specs" / "active" / "test-spec" / "validation-checklist.md"
+    assert checklist_file.is_file()
+
+
+# Content scaling tests (issue_type affects template content)
+
+
+def test_feature_spec_has_architectural_approach_section(tmp_path: Path) -> None:
+    """Feature issue_type includes Architectural Approach section."""
+    create("feature-spec", issue_type="feature", base_dir=tmp_path, register=False)
+    spec_file = tmp_path / "specs" / "active" / "feature-spec" / "spec.md"
+    content = spec_file.read_text()
+    assert "## Architectural Approach" in content
+
+
+def test_bug_spec_has_minimal_sections(tmp_path: Path) -> None:
+    """Bug issue_type has minimal sections (no Architectural Approach)."""
+    create("bug-spec", issue_type="bug", base_dir=tmp_path, register=False)
+    spec_file = tmp_path / "specs" / "active" / "bug-spec" / "spec.md"
+    content = spec_file.read_text()
+    assert "## Architectural Approach" not in content
+
+
+# Template variable tests
+
+
+def test_spec_md_title_uses_title_case(tmp_path: Path) -> None:
+    """spec.md title converts kebab-case to Title Case."""
+    create("multi-word-spec-name", base_dir=tmp_path, register=False)
+    spec_file = tmp_path / "specs" / "active" / "multi-word-spec-name" / "spec.md"
+    content = spec_file.read_text()
+    assert "# Spec: Multi Word Spec Name" in content
+
+
+def test_context_md_has_title(tmp_path: Path) -> None:
+    """context.md contains title with spec name in Title Case."""
+    create("my-feature", base_dir=tmp_path, register=False)
+    context_file = tmp_path / "specs" / "active" / "my-feature" / "context.md"
+    content = context_file.read_text()
+    assert "My Feature" in content
+
+
+def test_tasks_yaml_has_spec_code(tmp_path: Path) -> None:
+    """tasks.yaml references the spec code."""
+    create("focus-state", base_dir=tmp_path, register=False)
+    tasks_file = tmp_path / "specs" / "active" / "focus-state" / "tasks.yaml"
+    content = tasks_file.read_text()
+    assert "code: FS" in content
