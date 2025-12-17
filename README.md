@@ -51,6 +51,80 @@ echo '{"prompt": "implement feature"}' | dignity dispatch UserPromptSubmit
 
 Supported events: `UserPromptSubmit`, `Stop`, `SubagentStop`
 
+### spec
+
+Spec management commands for creating and tracking development specifications.
+
+#### Create a spec
+
+```bash
+dignity spec create my-feature --type feature
+dignity spec create fix-bug --type bug
+```
+
+Creates scaffolded files in `specs/active/{name}/`:
+- `spec.md` - Spec document with YAML frontmatter
+- `context.md` - Context and decisions
+- `tasks.yaml` - Task tracking
+- `dependencies.md` - Task dependency graph
+- `validation-checklist.md` - Validation tracking
+
+#### Query specs
+
+```bash
+dignity spec list --base specs                    # List all specs
+dignity spec list --base specs --status Active    # Filter by status
+dignity spec show specs/active/my-feature         # Show spec details
+dignity spec progress specs/active/my-feature     # Show completion stats
+```
+
+#### Task management
+
+```bash
+# List tasks
+dignity spec task list specs/active/my-feature
+
+# Manual task operations (CLI use)
+dignity spec task add specs/active/my-feature "Implement X" "Implementing X"
+dignity spec task update specs/active/my-feature MF-001 --status completed
+dignity spec task start specs/active/my-feature MF-001
+dignity spec task complete specs/active/my-feature MF-001
+dignity spec task discard specs/active/my-feature MF-002
+```
+
+Task IDs are auto-generated as `{CODE}-{NNN}` (e.g., `MF-001`).
+
+#### TodoWrite integration
+
+Sync tasks directly from Claude Code's TodoWrite payloads:
+
+```bash
+# Sync entire task list (replaces all tasks, updates statuses)
+echo '{"todos": [
+  {"content": "Create types", "status": "completed", "activeForm": "Creating types"},
+  {"content": "Write tests", "status": "in_progress", "activeForm": "Writing tests"},
+  {"content": "Implement parser", "status": "pending", "activeForm": "Implementing parser"}
+]}' | dignity spec task sync specs/active/my-feature --json
+
+# Append tasks from JSON (single or batch)
+echo '{"content": "New task", "activeForm": "Adding task"}' | dignity spec task add specs/active/my-feature --json
+```
+
+The `sync` command mirrors TodoWrite semantics - each call replaces the entire task list with updated statuses.
+
+```bash
+# Update single task (upsert - creates if ID doesn't exist)
+echo '{"content": "Updated", "status": "completed", "activeForm": "Updating"}' | \
+  dignity spec task update specs/active/my-feature MF-001 --json
+```
+
+#### Lifecycle management
+
+```bash
+dignity spec archive specs/active/my-feature    # Move to archive
+dignity spec restore specs/archive/my-feature   # Restore to active
+```
+
 ## Hook Dispatch
 
 Declarative rule-based activation system for Claude Code hooks.
