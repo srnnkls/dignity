@@ -72,24 +72,24 @@ Creates scaffolded files in `specs/active/{name}/`:
 #### Query specs
 
 ```bash
-dignity spec list --base specs                    # List all specs
-dignity spec list --base specs --status Active    # Filter by status
-dignity spec show specs/active/my-feature         # Show spec details
-dignity spec progress specs/active/my-feature     # Show completion stats
+dignity spec list                    # List all specs
+dignity spec list --status Active    # Filter by status
+dignity spec show my-feature         # Show spec details
+dignity spec progress my-feature     # Show completion stats
 ```
 
 #### Task management
 
 ```bash
 # List tasks
-dignity spec task list specs/active/my-feature
+dignity spec task list my-feature
 
 # Manual task operations (CLI use)
-dignity spec task add specs/active/my-feature "Implement X" "Implementing X"
-dignity spec task update specs/active/my-feature MF-001 --status completed
-dignity spec task start specs/active/my-feature MF-001
-dignity spec task complete specs/active/my-feature MF-001
-dignity spec task discard specs/active/my-feature MF-002
+dignity spec task add my-feature "Implement X" "Implementing X"
+dignity spec task update my-feature MF-001 --status completed
+dignity spec task start my-feature MF-001
+dignity spec task complete my-feature MF-001
+dignity spec task discard my-feature MF-002
 ```
 
 Task IDs are auto-generated as `{CODE}-{NNN}` (e.g., `MF-001`).
@@ -104,10 +104,10 @@ echo '{"todos": [
   {"content": "Create types", "status": "completed", "activeForm": "Creating types"},
   {"content": "Write tests", "status": "in_progress", "activeForm": "Writing tests"},
   {"content": "Implement parser", "status": "pending", "activeForm": "Implementing parser"}
-]}' | dignity spec task sync specs/active/my-feature --json
+]}' | dignity spec task sync my-feature --json
 
 # Append tasks from JSON (single or batch)
-echo '{"content": "New task", "activeForm": "Adding task"}' | dignity spec task add specs/active/my-feature --json
+echo '{"content": "New task", "activeForm": "Adding task"}' | dignity spec task add my-feature --json
 ```
 
 The `sync` command mirrors TodoWrite semantics - each call replaces the entire task list with updated statuses.
@@ -115,15 +115,32 @@ The `sync` command mirrors TodoWrite semantics - each call replaces the entire t
 ```bash
 # Update single task (upsert - creates if ID doesn't exist)
 echo '{"content": "Updated", "status": "completed", "activeForm": "Updating"}' | \
-  dignity spec task update specs/active/my-feature MF-001 --json
+  dignity spec task update my-feature MF-001 --json
 ```
 
 #### Lifecycle management
 
 ```bash
-dignity spec archive specs/active/my-feature    # Move to archive
-dignity spec restore specs/archive/my-feature   # Restore to active
+dignity spec archive my-feature    # Move to archive
+dignity spec restore my-feature    # Restore to active
 ```
+
+#### Configuration
+
+Spec directory location is configurable via environment variable or TOML file:
+
+```bash
+# Environment variable
+export DIGNITY_SPECS_DIR=/path/to/specs
+```
+
+Or create `dignity.toml` in your project root:
+
+```toml
+specs_dir = "specs"
+```
+
+Default: `specs/` relative to current directory.
 
 ## Hook Dispatch
 

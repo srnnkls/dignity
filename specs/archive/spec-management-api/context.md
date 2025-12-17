@@ -56,4 +56,24 @@ None - all clarified during validation.
 
 ## Gotchas & Learnings
 
-(To be filled during implementation)
+1. **YAML date parsing** - PyYAML auto-parses dates, need to handle both `date` objects and strings
+2. **Markdown section detection** - Code blocks with `#` chars need special handling
+3. **pydantic-settings TOML** - Requires custom source class for `[tool.dignity]` section
+
+## Archive Notes
+
+**Summary:** Implemented complete spec management API with 5 new modules (types, tasks, sections, query, lifecycle), 14 CLI commands, settings/config system, and TodoWrite-compatible JSON interface. All operations use spec names instead of paths.
+
+**Key Outcomes:**
+- 596 tests passing
+- Full CRUD for tasks with auto-ID generation
+- Markdown section manipulation preserving structure
+- Archive/restore lifecycle management
+- `--json` flags for TodoWrite integration (`add`, `sync`, `update`)
+- Configurable specs directory via env var or TOML
+
+**Technical Debt:** None identified.
+
+**Lessons Learned:**
+- TDD with subagents works well for parallel module development
+- Upsert semantics (`update` creates if not exists) simplifies integration

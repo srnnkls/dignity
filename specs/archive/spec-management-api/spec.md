@@ -2,7 +2,8 @@
 code: SMA
 issue_type: Feature
 created: 2025-12-17
-status: Active
+completed: 2025-12-17
+status: Complete
 claude_plan: /Users/srnnkls/.claude/plans/cached-yawning-stonebraker.md
 ---
 

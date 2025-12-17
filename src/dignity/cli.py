@@ -9,6 +9,9 @@ from typing import Annotated
 
 import typer
 
+from dignity.settings import get_settings
+from dignity.spec.query import SpecNotFoundError
+from dignity.spec.resolve import resolve_spec
 from dignity.statusline import StatusLineInput, render_statusline
 from dignity.tokens import get_token_metrics
 
@@ -114,14 +117,20 @@ def spec_create(
 
 @task_app.command("add")
 def task_add(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     content: Annotated[str | None, typer.Argument(help="Task description")] = None,
     active_form: Annotated[str | None, typer.Argument(help="Active form of task description")] = None,
     use_json: Annotated[bool, typer.Option("--json", help="Read task(s) from JSON stdin")] = False,
 ) -> None:
     """Add a new task to a spec."""
-    from dignity.spec import SpecNotFoundError, add_task, add_tasks, load_tasks, save_tasks
-    from dignity.spec.types import Status, Task, TasksFile
+    from dignity.spec import add_task, load_tasks, save_tasks
+    from dignity.spec.types import Status, Task
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     if use_json:
         try:
@@ -170,8 +179,8 @@ def task_add(
             for task in added_tasks:
                 typer.echo(f"Added task {task.id}: {task.content}")
 
-        except (FileNotFoundError, SpecNotFoundError):
-            typer.echo(f"Error: Spec not found at {spec_path}")
+        except FileNotFoundError:
+            typer.echo(f"Error: Spec '{spec_name}' not found")
             raise typer.Exit(1)
     else:
         if content is None or active_form is None:
@@ -181,18 +190,24 @@ def task_add(
         try:
             task = add_task(spec_path, content, active_form)
             typer.echo(f"Added task {task.id}: {task.content}")
-        except (FileNotFoundError, SpecNotFoundError):
-            typer.echo(f"Error: Spec not found at {spec_path}")
+        except FileNotFoundError:
+            typer.echo(f"Error: Spec '{spec_name}' not found")
             raise typer.Exit(1)
 
 
 @task_app.command("complete")
 def task_complete(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     task_id: Annotated[str, typer.Argument(help="Task ID to complete")],
 ) -> None:
     """Mark a task as completed."""
     from dignity.spec import TaskNotFoundError, complete_task
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         task = complete_task(spec_path, task_id)
@@ -201,17 +216,23 @@ def task_complete(
         typer.echo(f"Error: Task {task_id} not found")
         raise typer.Exit(1)
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @task_app.command("start")
 def task_start(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     task_id: Annotated[str, typer.Argument(help="Task ID to start")],
 ) -> None:
     """Mark a task as in_progress."""
     from dignity.spec import TaskNotFoundError, start_task
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         task = start_task(spec_path, task_id)
@@ -220,17 +241,23 @@ def task_start(
         typer.echo(f"Error: Task {task_id} not found")
         raise typer.Exit(1)
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @task_app.command("discard")
 def task_discard(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     task_id: Annotated[str, typer.Argument(help="Task ID to discard")],
 ) -> None:
     """Discard (remove) a task."""
     from dignity.spec import TaskNotFoundError, discard_task
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         discard_task(spec_path, task_id)
@@ -239,16 +266,22 @@ def task_discard(
         typer.echo(f"Error: Task {task_id} not found")
         raise typer.Exit(1)
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @task_app.command("list")
 def task_list(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
 ) -> None:
     """List all tasks in a spec."""
     from dignity.spec import load_tasks
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         tasks_file = load_tasks(spec_path)
@@ -258,13 +291,13 @@ def task_list(
         for task in tasks_file.tasks:
             typer.echo(f"{task.id}: {task.content} [{task.status.value}]")
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @task_app.command("update")
 def task_update(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     task_id: Annotated[str, typer.Argument(help="Task ID to update or create")],
     content: Annotated[str | None, typer.Option("--content", help="Task content")] = None,
     active_form: Annotated[str | None, typer.Option("--active-form", help="Active form")] = None,
@@ -274,6 +307,12 @@ def task_update(
     """Update or create a task (upsert). Creates if ID doesn't exist."""
     from dignity.spec import update_task
     from dignity.spec.types import Status
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     if use_json:
         try:
@@ -302,18 +341,24 @@ def task_update(
         typer.echo(f"Error: {e}")
         raise typer.Exit(1)
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @task_app.command("sync")
 def task_sync(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
     use_json: Annotated[bool, typer.Option("--json", help="Read tasks from JSON stdin")] = False,
 ) -> None:
     """Sync tasks - replace entire task list with new tasks from JSON."""
-    from dignity.spec import SpecNotFoundError, load_tasks, save_tasks
-    from dignity.spec.types import Status, Task, TasksFile
+    from dignity.spec import load_tasks, save_tasks
+    from dignity.spec.types import Status, Task
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     if not use_json:
         typer.echo("Error: --json flag is required for sync command")
@@ -332,7 +377,7 @@ def task_sync(
     try:
         tasks_file = load_tasks(spec_path)
     except FileNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
     todos = input_data["todos"]
@@ -359,16 +404,22 @@ def task_sync(
 
 @spec_app.command("archive")
 def spec_archive(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory to archive")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name to archive")],
 ) -> None:
     """Archive a spec (move from active to archive)."""
-    from dignity.spec import SpecNotFoundError, archive
+    from dignity.spec import archive
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         dest = archive(spec_path)
         typer.echo(f"Archived spec to {dest}")
     except SpecNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
     except ValueError as e:
         typer.echo(f"Error: {e}")
@@ -377,16 +428,22 @@ def spec_archive(
 
 @spec_app.command("restore")
 def spec_restore(
-    spec_path: Annotated[Path, typer.Argument(help="Path to archived spec to restore")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name to restore")],
 ) -> None:
     """Restore an archived spec (move from archive to active)."""
-    from dignity.spec import SpecNotFoundError, restore
+    from dignity.spec import restore
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         dest = restore(spec_path)
         typer.echo(f"Restored spec to {dest}")
     except SpecNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
     except ValueError as e:
         typer.echo(f"Error: {e}")
@@ -395,9 +452,6 @@ def spec_restore(
 
 @spec_app.command("list")
 def spec_list(
-    base: Annotated[
-        Path | None, typer.Option("--base", help="Base specs directory")
-    ] = None,
     status: Annotated[
         str | None, typer.Option("--status", help="Filter by status (Active, Archived)")
     ] = None,
@@ -405,8 +459,8 @@ def spec_list(
     """List all specs."""
     from dignity.spec import list_specs
 
-    base_path = base if base else Path("specs")
-    specs = list_specs(base_path, status=status)
+    settings = get_settings()
+    specs = list_specs(settings.specs_dir, status=status)
     if not specs:
         typer.echo("No specs found")
         return
@@ -416,10 +470,16 @@ def spec_list(
 
 @spec_app.command("show")
 def spec_show(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
 ) -> None:
     """Show details of a spec."""
-    from dignity.spec import SpecNotFoundError, get_spec
+    from dignity.spec import get_spec
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         spec = get_spec(spec_path)
@@ -429,16 +489,22 @@ def spec_show(
         typer.echo(f"Status: {spec.status}")
         typer.echo(f"Created: {spec.created.isoformat()}")
     except SpecNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
 @spec_app.command("progress")
 def spec_progress(
-    spec_path: Annotated[Path, typer.Argument(help="Path to spec directory")],
+    spec_name: Annotated[str, typer.Argument(help="Spec name")],
 ) -> None:
     """Show progress of a spec."""
-    from dignity.spec import SpecNotFoundError, get_progress
+    from dignity.spec import get_progress
+
+    try:
+        spec_path = resolve_spec(spec_name)
+    except SpecNotFoundError:
+        typer.echo(f"Error: Spec '{spec_name}' not found")
+        raise typer.Exit(1)
 
     try:
         progress = get_progress(spec_path)
@@ -448,7 +514,7 @@ def spec_progress(
         typer.echo(f"Pending: {progress['pending']}")
         typer.echo(f"Progress: {progress['percent_complete']:.0f}%")
     except SpecNotFoundError:
-        typer.echo(f"Error: Spec not found at {spec_path}")
+        typer.echo(f"Error: Spec '{spec_name}' not found")
         raise typer.Exit(1)
 
 
